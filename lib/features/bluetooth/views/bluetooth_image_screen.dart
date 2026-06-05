@@ -13,63 +13,12 @@ class BluetoothImageScreen extends StatefulWidget {
 }
 
 class _BluetoothImageScreenState extends State<BluetoothImageScreen> {
-  final _picker = ImagePicker();
-
-  // TODO: drive these from your BT service
-  final bool _isConnected = false;
-  final List<BluetoothImageTransfer> _transfers = [];
-  bool _isSending = false;
-
   Uint8List? _selectedImage;
-  BluetoothImageTransfer? _previewTransfer;
+  final bool _isConnected = false;
+  final List<BtImageTransfer> _transfers = [];
+  final bool _isSending = false;
 
-  Future<void> _pickImage(ImageSource source) async {
-    final XFile? file = await _picker.pickImage(
-      source: source,
-      imageQuality: 50,
-      maxWidth: 600,
-      maxHeight: 600,
-    );
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
-    setState(() {
-      _selectedImage = bytes;
-      _previewTransfer = null;
-    });
-  }
-
-  Future<void> _sendSelected() async {
-    if (_selectedImage == null || _isSending) return;
-    setState(() => _isSending = true);
-
-    // TODO: send via your BT service, e.g.:
-    // final error = await yourBtService.sendImage(_selectedImage!);
-    // if (error != null) { show snackbar; return; }
-
-    setState(() {
-      _transfers.add(
-        BluetoothImageTransfer(bytes: _selectedImage!, isSent: true),
-      );
-      _selectedImage = null;
-      _isSending = false;
-    });
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Image sent'),
-        backgroundColor: AppTheme.success,
-      ),
-    );
-  }
-
-  // Call this when your BT service receives image bytes
-  void onImageReceived(Uint8List bytes) {
-    setState(() {
-      final transfer = BluetoothImageTransfer(bytes: bytes, isSent: false);
-      _transfers.add(transfer);
-      _previewTransfer = transfer;
-    });
-  }
+  BtImageTransfer? _previewTransfer;
 
   @override
   Widget build(BuildContext context) {
@@ -98,13 +47,18 @@ class _BluetoothImageScreenState extends State<BluetoothImageScreen> {
               child: _previewTransfer != null
                   ? _ImagePreview(
                       transfer: _previewTransfer!,
+                      isSent: false, // TODO: Determine this based on state
                       onDismiss: () => setState(() => _previewTransfer = null),
                     )
                   : _selectedImage != null
                   ? _SelectedImagePreview(
                       bytes: _selectedImage!,
                       isSending: _isSending,
-                      onSend: _isConnected ? _sendSelected : null,
+                      onSend: _isConnected
+                          ? () {
+                              /*TODO: SEND SELECTED */
+                            }
+                          : null,
                       onClear: () => setState(() => _selectedImage = null),
                     )
                   : _TransferHistory(
@@ -117,10 +71,12 @@ class _BluetoothImageScreenState extends State<BluetoothImageScreen> {
               isConnected: _isConnected,
               isSending: _isSending,
               hasSelection: _selectedImage != null,
-              onPickGallery: () => _pickImage(ImageSource.gallery),
-              onPickCamera: () => _pickImage(ImageSource.camera),
+              onPickGallery: () {},
+              onPickCamera: () {},
               onSend: _isConnected && _selectedImage != null && !_isSending
-                  ? _sendSelected
+                  ? () {
+                      /*TODO: SEND SELECTED */
+                    }
                   : null,
             ),
           ],
@@ -146,7 +102,7 @@ class _DisconnectedBanner extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            'No active connection — you can preview but not send',
+            'No active connection. Please, Connect to a device to send or receive images.',
             style: TextStyles.regular.copyWith(
               fontSize: 13,
               color: AppTheme.textSecondary,
@@ -159,10 +115,15 @@ class _DisconnectedBanner extends StatelessWidget {
 }
 
 class _ImagePreview extends StatelessWidget {
-  final BluetoothImageTransfer transfer;
+  final BtImageTransfer transfer;
+  final bool isSent;
   final VoidCallback onDismiss;
 
-  const _ImagePreview({required this.transfer, required this.onDismiss});
+  const _ImagePreview({
+    required this.transfer,
+    required this.isSent,
+    required this.onDismiss,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -179,8 +140,8 @@ class _ImagePreview extends StatelessWidget {
           child: Row(
             children: [
               _BadgeChip(
-                label: transfer.isSent ? 'Sent' : 'Received',
-                color: transfer.isSent ? AppTheme.secondary : AppTheme.success,
+                label: isSent ? 'Sent' : 'Received',
+                color: isSent ? AppTheme.secondary : AppTheme.success,
               ),
               const SizedBox(width: 8),
               IconButton.filled(
@@ -255,8 +216,8 @@ class _SelectedImagePreview extends StatelessWidget {
 }
 
 class _TransferHistory extends StatelessWidget {
-  final List<BluetoothImageTransfer> transfers;
-  final ValueChanged<BluetoothImageTransfer> onTapTransfer;
+  final List<BtImageTransfer> transfers;
+  final ValueChanged<BtImageTransfer> onTapTransfer;
 
   const _TransferHistory({
     required this.transfers,
@@ -299,6 +260,7 @@ class _TransferHistory extends StatelessWidget {
       itemCount: transfers.length,
       itemBuilder: (context, index) {
         final t = transfers[transfers.length - 1 - index];
+        final isSent = false;
         return GestureDetector(
           onTap: () => onTapTransfer(t),
           child: Stack(
@@ -312,8 +274,8 @@ class _TransferHistory extends StatelessWidget {
                 top: 4,
                 left: 4,
                 child: _BadgeChip(
-                  label: t.isSent ? 'Sent' : 'Rcvd',
-                  color: t.isSent ? AppTheme.secondary : AppTheme.success,
+                  label: isSent ? 'Sent' : 'Rcvd',
+                  color: isSent ? AppTheme.secondary : AppTheme.success,
                   small: true,
                 ),
               ),

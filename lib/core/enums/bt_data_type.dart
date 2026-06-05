@@ -1,0 +1,1 @@
+enum BtDataType { text, image }

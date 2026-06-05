@@ -1,25 +1,25 @@
 import 'dart:typed_data';
 
-class BluetoothMessage {
-  final String text;
-  final bool isSent;
-  final DateTime timestamp;
+import 'package:offline_data_transfer/core/enums/bt_data_type.dart';
 
-  BluetoothMessage({
-    required this.text,
-    required this.isSent,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+sealed class BtData {
+  final Object data;
+  final BtDataType type;
+  final DateTime timestamp;
+  BtData({required this.data, required this.type, DateTime? timestamp})
+    : timestamp = timestamp ?? DateTime.now();
 }
 
-class BluetoothImageTransfer {
-  final Uint8List bytes;
-  final bool isSent;
-  final DateTime timestamp;
+class BtTextMessage extends BtData {
+  final String text;
 
-  BluetoothImageTransfer({
-    required this.bytes,
-    required this.isSent,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+  BtTextMessage({required this.text, super.timestamp})
+    : super(data: text, type: BtDataType.text);
+}
+
+class BtImageTransfer extends BtData {
+  final Uint8List bytes;
+
+  BtImageTransfer({required this.bytes, super.timestamp})
+    : super(data: bytes, type: BtDataType.image);
 }

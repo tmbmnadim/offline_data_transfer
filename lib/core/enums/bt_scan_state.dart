@@ -1,0 +1,1 @@
+enum BtScanState { idle, scanning }

@@ -17,7 +17,7 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
   // TODO: drive these from your BT service
   final bool _isConnected = false;
   final String _deviceName = '';
-  final List<BluetoothMessage> _messages = [];
+  final List<BtTextMessage> _messages = [];
   bool _isSending = false;
 
   @override
@@ -39,7 +39,7 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
     // if (error != null) { show snackbar }
 
     setState(() {
-      _messages.add(BluetoothMessage(text: text, isSent: true));
+      _messages.add(BtTextMessage(text: text, timestamp: DateTime.now()));
       _isSending = false;
     });
     _scrollToBottom();
@@ -47,7 +47,9 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
 
   // Call this when your BT service receives a text message
   void onMessageReceived(String text) {
-    setState(() => _messages.add(BluetoothMessage(text: text, isSent: false)));
+    setState(
+      () => _messages.add(BtTextMessage(text: text, timestamp: DateTime.now())),
+    );
     _scrollToBottom();
   }
 
@@ -143,7 +145,7 @@ class _DisconnectedBanner extends StatelessWidget {
 }
 
 class _MessageList extends StatelessWidget {
-  final List<BluetoothMessage> messages;
+  final List<BtTextMessage> messages;
   final ScrollController scrollController;
 
   const _MessageList({required this.messages, required this.scrollController});
@@ -183,13 +185,13 @@ class _MessageList extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  final BluetoothMessage message;
+  final BtTextMessage message;
 
   const _MessageBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
-    final isSent = message.isSent;
+    final isSent = false; // TODO: Determine this based on state
     final timeStr =
         '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 

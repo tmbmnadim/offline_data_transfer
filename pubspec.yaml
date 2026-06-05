@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_blue_classic: ^0.1.0
+  get: ^4.7.3
   image_picker: ^1.2.2
 
 dev_dependencies:
