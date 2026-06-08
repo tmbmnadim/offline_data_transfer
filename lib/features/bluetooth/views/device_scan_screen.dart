@@ -1,16 +1,14 @@
+import 'dart:async';
+import 'dart:developer';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_blue_classic/flutter_blue_classic.dart';
 import 'package:offline_data_transfer/core/theme/app_theme.dart';
 import 'package:offline_data_transfer/core/theme/text_styles.dart';
-
-// Minimal device model — swap for your BT package's device type when wiring up
-class BtDevice {
-  final String address;
-  final String? name;
-
-  const BtDevice({required this.address, this.name});
-
-  String get displayName => name?.isNotEmpty == true ? name! : address;
-}
+import 'package:offline_data_transfer/features/bluetooth/models/bt_device.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class DeviceScanScreen extends StatefulWidget {
   const DeviceScanScreen({super.key});
@@ -20,62 +18,150 @@ class DeviceScanScreen extends StatefulWidget {
 }
 
 class _DeviceScanScreenState extends State<DeviceScanScreen> {
-  // TODO: populate from your BT service
-  final List<BtDevice> _bonded = [];
-  final List<BtDevice> _discovered = [];
-  BtDevice? _connected;
+  final _flutterBlueClassicPlugin = FlutterBlueClassic();
+
+  BluetoothAdapterState _adapterState = BluetoothAdapterState.unknown;
+  StreamSubscription? _adapterStateSubscription;
+
+  final Set<BtDevice> _discovered = {};
+  Set<BtDevice> get _discoveredNotBonded => _discovered.difference(_bonded);
+  final Set<BtDevice> _bonded = {};
+  StreamSubscription? _scanSubscription;
+  BluetoothConnection? _connection;
+  BtDevice? _connectedDevice;
+
   bool _isScanning = false;
   bool _isConnecting = false;
+  int? _connectingToIndex;
+  StreamSubscription? _scanningStateSubscription;
 
   @override
   void initState() {
+    _permissions();
     super.initState();
-    _loadBonded();
+    initPlatformState();
   }
 
-  Future<void> _loadBonded() async {
-    // TODO: fetch bonded/paired devices from your BT service
-    // final devices = await yourBtService.bondedDevices;
-    // setState(() => _bonded = devices.map(...).toList());
+  void _permissions() async {
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.location,
+    ].request();
+
+    if (statuses[Permission.bluetoothScan]?.isDenied == true ||
+        statuses[Permission.location]?.isDenied == true) {
+      log('Permissions denied');
+      return;
+    }
   }
 
-  Future<void> _startScan() async {
+  Future<void> initPlatformState() async {
+    BluetoothAdapterState adapterState = _adapterState;
+
+    try {
+      adapterState = await _flutterBlueClassicPlugin.adapterStateNow;
+      await _checkBondedDevices();
+      _adapterStateSubscription = _flutterBlueClassicPlugin.adapterState.listen(
+        (current) {
+          SchedulerBinding.instance.addPostFrameCallback(
+            (_) => _checkBondedDevices(),
+          );
+          if (mounted) setState(() => _adapterState = current);
+        },
+      );
+      _scanSubscription = _flutterBlueClassicPlugin.scanResults.listen((
+        device,
+      ) {
+        if (mounted) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            setState(
+              () => _discoveredNotBonded.add(
+                BtDevice(address: device.address, name: device.name),
+              ),
+            );
+          });
+        }
+      });
+      _scanningStateSubscription = _flutterBlueClassicPlugin.isScanning.listen((
+        isScanning,
+      ) {
+        log("Scanning state changed: $isScanning");
+        if (mounted) setState(() => _isScanning = isScanning);
+      });
+    } catch (e) {
+      if (kDebugMode) print(e);
+    }
+
+    if (!mounted) return;
+
     setState(() {
-      _discovered.clear();
-      _isScanning = true;
+      _adapterState = adapterState;
     });
-    // TODO: start discovery via your BT service and populate _discovered
-    // yourBtService.startDiscovery().listen((result) {
-    //   setState(() => _discovered.add(BtDevice(address: result.device.address, name: result.device.name)));
-    // }, onDone: () => setState(() => _isScanning = false));
+  }
+
+  Future<void> _checkBondedDevices() async {
+    try {
+      final bonded = await _flutterBlueClassicPlugin.bondedDevices;
+      if ((bonded ?? []).isNotEmpty) {
+        setState(() {
+          _bonded.clear();
+          _bonded.addAll(
+            bonded!.map((d) => BtDevice(address: d.address, name: d.name)),
+          );
+        });
+      }
+    } catch (e) {
+      log('Error fetching bonded devices: $e');
+    }
+  }
+
+  void _startScan() {
+    try {
+      _permissions();
+      _flutterBlueClassicPlugin.startScan();
+    } catch (e, s) {
+      log('Error starting scan: $e\n$s');
+    }
   }
 
   void _stopScan() {
-    // TODO: cancel discovery via your BT service
-    setState(() => _isScanning = false);
+    try {
+      _flutterBlueClassicPlugin.stopScan();
+    } catch (e, s) {
+      log('Error stopping scan: $e\n$s');
+    }
   }
 
-  Future<void> _connectTo(BtDevice device) async {
-    setState(() => _isConnecting = true);
-    // TODO: connect via your BT service
-    // final error = await yourBtService.connect(device.address);
-    // if (error != null) { show snackbar }
-    setState(() {
-      _isConnecting = false;
-      _connected = device; // remove this placeholder once real call is wired
-    });
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Connected to ${device.displayName}'),
-        backgroundColor: AppTheme.success,
-      ),
-    );
+  void _connectTo(BtDevice device) async {
+    _isConnecting = true;
+    setState(() {});
+    _connection = await _flutterBlueClassicPlugin.connect(device.address);
+    _isConnecting = false;
+    setState(() {});
   }
 
-  Future<void> _disconnect() async {
-    // TODO: disconnect via your BT service
-    setState(() => _connected = null);
+  void _bondTo(BtDevice device) async {
+    try {
+      await _flutterBlueClassicPlugin.bondDevice(device.address);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bonded to ${device.displayName}')),
+      );
+      _bonded.add(device);
+      setState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to bond: $e')));
+    }
+  }
+
+  @override
+  void dispose() {
+    _adapterStateSubscription?.cancel();
+    _scanSubscription?.cancel();
+    _scanningStateSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -106,21 +192,24 @@ class _DeviceScanScreenState extends State<DeviceScanScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (_connected != null) ...[
+            if (_connection != null && _connectedDevice != null) ...[
               _ConnectedDeviceTile(
-                device: _connected!,
-                onDisconnect: _disconnect,
+                device: _connectedDevice!,
+                onDisconnect: () async {
+                  _connection!.close();
+                  setState(() => _connection = null);
+                },
               ),
               const SizedBox(height: 16),
             ],
-            _SectionHeader(title: 'Paired Devices', count: _bonded.length),
+            // _SectionHeader(title: 'Paired Devices', count: _bonded.length),
             if (_bonded.isEmpty)
               const _EmptyHint(message: 'No paired devices found')
             else
               ..._bonded.map(
-                (d) => _DeviceTile(
+                (d) => _BondedDeviceTile(
                   device: d,
-                  isConnected: _connected?.address == d.address,
+                  isConnected: _connection?.address == d.address,
                   isConnecting: _isConnecting,
                   onTap: () => _connectTo(d),
                 ),
@@ -128,7 +217,7 @@ class _DeviceScanScreenState extends State<DeviceScanScreen> {
             const SizedBox(height: 24),
             _SectionHeader(
               title: 'Nearby Devices',
-              count: _discovered.length,
+              count: _discoveredNotBonded.length,
               trailing: _isScanning
                   ? TextButton(onPressed: _stopScan, child: const Text('Stop'))
                   : TextButton(
@@ -136,20 +225,20 @@ class _DeviceScanScreenState extends State<DeviceScanScreen> {
                       child: const Text('Scan'),
                     ),
             ),
-            if (_isScanning && _discovered.isEmpty)
+            if (_isScanning && _discoveredNotBonded.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(child: _ScanningIndicator()),
               )
-            else if (!_isScanning && _discovered.isEmpty)
+            else if (!_isScanning && _discoveredNotBonded.isEmpty)
               const _EmptyHint(message: 'Tap Scan to search for nearby devices')
             else
-              ..._discovered.map(
-                (d) => _DeviceTile(
+              ..._discoveredNotBonded.map(
+                (d) => _ScannedDeviceTile(
                   device: d,
-                  isConnected: _connected?.address == d.address,
-                  isConnecting: _isConnecting,
-                  onTap: () => _connectTo(d),
+                  isConnected: false,
+                  isConnecting: false,
+                  onTap: () => _bondTo(d),
                 ),
               ),
           ],
@@ -247,13 +336,69 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _DeviceTile extends StatelessWidget {
+class _BondedDeviceTile extends StatelessWidget {
   final BtDevice device;
   final bool isConnected;
   final bool isConnecting;
   final VoidCallback onTap;
 
-  const _DeviceTile({
+  const _BondedDeviceTile({
+    required this.device,
+    required this.isConnected,
+    required this.isConnecting,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(
+          Icons.bluetooth,
+          color: isConnected ? AppTheme.success : AppTheme.textSecondary,
+        ),
+        title: Text(device.displayName, style: TextStyles.medium),
+        subtitle: Text(
+          device.address,
+          style: TextStyles.regular.copyWith(
+            color: AppTheme.textTertiary,
+            fontSize: 12,
+          ),
+        ),
+        trailing: isConnected
+            ? const Chip(
+                label: Text('Sync On'),
+                backgroundColor: Color(0xFFE6F9F1),
+              )
+            : isConnecting
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : ElevatedButton(
+                onPressed: onTap,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+                child: const Text('Start Sync'),
+              ),
+      ),
+    );
+  }
+}
+
+class _ScannedDeviceTile extends StatelessWidget {
+  final BtDevice device;
+  final bool isConnected;
+  final bool isConnecting;
+  final VoidCallback onTap;
+
+  const _ScannedDeviceTile({
     required this.device,
     required this.isConnected,
     required this.isConnecting,
