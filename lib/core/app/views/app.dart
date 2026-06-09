@@ -7,33 +7,14 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Preload assets if needed
-    // AppImages.preload(context);
-
-    // If you use ScreenUtil, wrap MaterialApp with it here.
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: "My offline_data_transfer App",
-      // --- Theme Configuration ---
+      title: 'Offline Data Transfer',
       theme: AppTheme.light,
-      // darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,
-
-      // We use a global key so we can navigate without context if needed (Service Locator pattern)
       navigatorKey: AppRouter.navigatorKey,
       onGenerateRoute: AppRouter.onGenerateRoute,
       initialRoute: AppRouter.initial,
-
-      // --- Localization Configuration ---
-      // Add 'flutter_localizations' to pubspec.yaml for this to work
-      // localizationsDelegates: const [
-      //   GlobalMaterialLocalizations.delegate,
-      //   GlobalWidgetsLocalizations.delegate,
-      //   GlobalCupertinoLocalizations.delegate,
-      // ],
-      // supportedLocales: const [
-      //   Locale('en', 'US'),
-      // ],
     );
   }
 }

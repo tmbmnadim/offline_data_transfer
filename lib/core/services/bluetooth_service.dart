@@ -8,8 +8,6 @@ import 'package:offline_data_transfer/features/bluetooth/models/bluetooth_messag
 import 'dart:async';
 import 'dart:developer' show log;
 
-import 'package:flutter_blue_classic/flutter_blue_classic.dart';
-
 part 'bluetooth_classic_service.dart';
 
 typedef BtAdapterStateCallback = void Function(BtAdapterState state);

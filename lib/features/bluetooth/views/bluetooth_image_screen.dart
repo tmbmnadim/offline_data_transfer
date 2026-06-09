@@ -1,83 +1,30 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:offline_data_transfer/core/theme/app_theme.dart';
 import 'package:offline_data_transfer/core/theme/text_styles.dart';
 import 'package:offline_data_transfer/features/bluetooth/models/bluetooth_message.dart';
 
-class BluetoothImageScreen extends StatefulWidget {
+class BluetoothImageScreen extends StatelessWidget {
   const BluetoothImageScreen({super.key});
-
-  @override
-  State<BluetoothImageScreen> createState() => _BluetoothImageScreenState();
-}
-
-class _BluetoothImageScreenState extends State<BluetoothImageScreen> {
-  Uint8List? _selectedImage;
-  final bool _isConnected = false;
-  final List<BtImageTransfer> _transfers = [];
-  final bool _isSending = false;
-
-  BtImageTransfer? _previewTransfer;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Image Transfer'),
-        actions: [
-          if (_transfers.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Clear history',
-              onPressed: () => setState(() {
-                _transfers.clear();
-                _previewTransfer = null;
-                _selectedImage = null;
-              }),
-            ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Image Transfer')),
       body: SafeArea(
         top: false,
         child: Column(
           children: [
-            if (!_isConnected) _DisconnectedBanner(),
-            Expanded(
-              child: _previewTransfer != null
-                  ? _ImagePreview(
-                      transfer: _previewTransfer!,
-                      isSent: false, // TODO: Determine this based on state
-                      onDismiss: () => setState(() => _previewTransfer = null),
-                    )
-                  : _selectedImage != null
-                  ? _SelectedImagePreview(
-                      bytes: _selectedImage!,
-                      isSending: _isSending,
-                      onSend: _isConnected
-                          ? () {
-                              /*TODO: SEND SELECTED */
-                            }
-                          : null,
-                      onClear: () => setState(() => _selectedImage = null),
-                    )
-                  : _TransferHistory(
-                      transfers: _transfers,
-                      onTapTransfer: (t) =>
-                          setState(() => _previewTransfer = t),
-                    ),
+            const _DisconnectedBanner(),
+            const Expanded(
+              child: _TransferHistory(transfers: []),
             ),
             _BottomActions(
-              isConnected: _isConnected,
-              isSending: _isSending,
-              hasSelection: _selectedImage != null,
+              isConnected: false,
+              isSending: false,
+              hasSelection: false,
               onPickGallery: () {},
               onPickCamera: () {},
-              onSend: _isConnected && _selectedImage != null && !_isSending
-                  ? () {
-                      /*TODO: SEND SELECTED */
-                    }
-                  : null,
+              onSend: null,
             ),
           ],
         ),
@@ -87,6 +34,8 @@ class _BluetoothImageScreenState extends State<BluetoothImageScreen> {
 }
 
 class _DisconnectedBanner extends StatelessWidget {
+  const _DisconnectedBanner();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -102,7 +51,7 @@ class _DisconnectedBanner extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            'No active connection. Please, Connect to a device to send or receive images.',
+            'No active connection. Please connect to a device to send or receive images.',
             style: TextStyles.regular.copyWith(
               fontSize: 13,
               color: AppTheme.textSecondary,
@@ -114,115 +63,10 @@ class _DisconnectedBanner extends StatelessWidget {
   }
 }
 
-class _ImagePreview extends StatelessWidget {
-  final BtImageTransfer transfer;
-  final bool isSent;
-  final VoidCallback onDismiss;
-
-  const _ImagePreview({
-    required this.transfer,
-    required this.isSent,
-    required this.onDismiss,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Center(
-          child: InteractiveViewer(
-            child: Image.memory(transfer.bytes, fit: BoxFit.contain),
-          ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: Row(
-            children: [
-              _BadgeChip(
-                label: isSent ? 'Sent' : 'Received',
-                color: isSent ? AppTheme.secondary : AppTheme.success,
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: onDismiss,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SelectedImagePreview extends StatelessWidget {
-  final Uint8List bytes;
-  final bool isSending;
-  final VoidCallback? onSend;
-  final VoidCallback onClear;
-
-  const _SelectedImagePreview({
-    required this.bytes,
-    required this.isSending,
-    required this.onSend,
-    required this.onClear,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Center(
-          child: InteractiveViewer(
-            child: Image.memory(bytes, fit: BoxFit.contain),
-          ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: Row(
-            children: [
-              const _BadgeChip(label: 'Selected', color: AppTheme.warning),
-              const SizedBox(width: 8),
-              if (!isSending)
-                IconButton.filled(
-                  onPressed: onClear,
-                  icon: const Icon(Icons.close),
-                ),
-            ],
-          ),
-        ),
-        if (isSending)
-          Container(
-            color: Colors.black45,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(color: Colors.white),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Sending...',
-                    style: TextStyles.medium.copyWith(color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 class _TransferHistory extends StatelessWidget {
   final List<BtImageTransfer> transfers;
-  final ValueChanged<BtImageTransfer> onTapTransfer;
 
-  const _TransferHistory({
-    required this.transfers,
-    required this.onTapTransfer,
-  });
+  const _TransferHistory({required this.transfers});
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +79,8 @@ class _TransferHistory extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'No images yet',
-              style: TextStyles.regular.copyWith(color: AppTheme.textTertiary),
+              style:
+                  TextStyles.regular.copyWith(color: AppTheme.textTertiary),
             ),
             Text(
               'Pick an image below to send, or wait to receive one',
@@ -260,27 +105,9 @@ class _TransferHistory extends StatelessWidget {
       itemCount: transfers.length,
       itemBuilder: (context, index) {
         final t = transfers[transfers.length - 1 - index];
-        final isSent = false;
-        return GestureDetector(
-          onTap: () => onTapTransfer(t),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.memory(t.bytes, fit: BoxFit.cover),
-              ),
-              Positioned(
-                top: 4,
-                left: 4,
-                child: _BadgeChip(
-                  label: isSent ? 'Sent' : 'Rcvd',
-                  color: isSent ? AppTheme.secondary : AppTheme.success,
-                  small: true,
-                ),
-              ),
-            ],
-          ),
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(t.bytes, fit: BoxFit.cover),
         );
       },
     );
@@ -340,40 +167,6 @@ class _BottomActions extends StatelessWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _BadgeChip extends StatelessWidget {
-  final String label;
-  final Color color;
-  final bool small;
-
-  const _BadgeChip({
-    required this.label,
-    required this.color,
-    this.small = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: small ? 6 : 10,
-        vertical: small ? 2 : 4,
-      ),
-      decoration: BoxDecoration(
-        color: color.withAlpha(220),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyles.regular.copyWith(
-          color: Colors.white,
-          fontSize: small ? 10 : 12,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }

@@ -14,55 +14,11 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
 
-  // TODO: drive these from your BT service
-  final bool _isConnected = false;
-  final String _deviceName = '';
-  final List<BtTextMessage> _messages = [];
-  bool _isSending = false;
-
   @override
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _textController.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    setState(() => _isSending = true);
-    _textController.clear();
-
-    // TODO: send via your BT service, e.g.:
-    // final error = await yourBtService.sendText(text);
-    // if (error != null) { show snackbar }
-
-    setState(() {
-      _messages.add(BtTextMessage(text: text, timestamp: DateTime.now()));
-      _isSending = false;
-    });
-    _scrollToBottom();
-  }
-
-  // Call this when your BT service receives a text message
-  void onMessageReceived(String text) {
-    setState(
-      () => _messages.add(BtTextMessage(text: text, timestamp: DateTime.now())),
-    );
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   @override
@@ -74,10 +30,10 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
           children: [
             const Text('Text Chat'),
             Text(
-              _isConnected ? _deviceName : 'Not connected',
+              'Not connected',
               style: TextStyles.regular.copyWith(
                 fontSize: 13,
-                color: _isConnected ? AppTheme.success : AppTheme.textTertiary,
+                color: AppTheme.textTertiary,
               ),
             ),
           ],
@@ -86,9 +42,7 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Clear messages',
-            onPressed: _messages.isEmpty
-                ? null
-                : () => setState(() => _messages.clear()),
+            onPressed: null,
           ),
         ],
       ),
@@ -96,18 +50,18 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
         top: false,
         child: Column(
           children: [
-            if (!_isConnected) _DisconnectedBanner(),
+            const _DisconnectedBanner(),
             Expanded(
               child: _MessageList(
-                messages: _messages,
+                messages: const [],
                 scrollController: _scrollController,
               ),
             ),
             _InputBar(
               controller: _textController,
-              isSending: _isSending,
-              isConnected: _isConnected,
-              onSend: _sendMessage,
+              isSending: false,
+              isConnected: false,
+              onSend: () {},
             ),
           ],
         ),
@@ -117,6 +71,8 @@ class _BluetoothChatScreenState extends State<BluetoothChatScreen> {
 }
 
 class _DisconnectedBanner extends StatelessWidget {
+  const _DisconnectedBanner();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -148,7 +104,8 @@ class _MessageList extends StatelessWidget {
   final List<BtTextMessage> messages;
   final ScrollController scrollController;
 
-  const _MessageList({required this.messages, required this.scrollController});
+  const _MessageList(
+      {required this.messages, required this.scrollController});
 
   @override
   Widget build(BuildContext context) {
@@ -161,7 +118,8 @@ class _MessageList extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'No messages yet',
-              style: TextStyles.regular.copyWith(color: AppTheme.textTertiary),
+              style:
+                  TextStyles.regular.copyWith(color: AppTheme.textTertiary),
             ),
             Text(
               'Type something below and tap Send',
@@ -179,19 +137,22 @@ class _MessageList extends StatelessWidget {
       controller: scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: messages.length,
-      itemBuilder: (context, index) => _MessageBubble(message: messages[index]),
+      itemBuilder: (context, index) => _MessageBubble(
+        message: messages[index],
+        isSent: false,
+      ),
     );
   }
 }
 
 class _MessageBubble extends StatelessWidget {
   final BtTextMessage message;
+  final bool isSent;
 
-  const _MessageBubble({required this.message});
+  const _MessageBubble({required this.message, required this.isSent});
 
   @override
   Widget build(BuildContext context) {
-    final isSent = false; // TODO: Determine this based on state
     final timeStr =
         '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 
@@ -202,7 +163,8 @@ class _MessageBubble extends StatelessWidget {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.72,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isSent ? AppTheme.secondary : Colors.white,
           border: isSent ? null : Border.all(color: AppTheme.border),
@@ -214,9 +176,8 @@ class _MessageBubble extends StatelessWidget {
           ),
         ),
         child: Column(
-          crossAxisAlignment: isSent
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Text(
               message.text,
@@ -276,7 +237,8 @@ class _InputBar extends StatelessWidget {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
               decoration: InputDecoration(
-                hintText: isConnected ? 'Type a message...' : 'Not connected',
+                hintText:
+                    isConnected ? 'Type a message...' : 'Not connected',
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
